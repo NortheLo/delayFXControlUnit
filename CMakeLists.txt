@@ -10,10 +10,10 @@ project(delay-control)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-add_executable(delay-control src/delay-control.c)
+add_executable(delay-control src/delay-control.c libs/ads1115.c)
 
 # pull in common dependencies
-target_link_libraries(delay-control pico_stdlib hardware_pwm hardware_i2c)
+target_link_libraries(delay-control pico_stdlib hardware_pwm hardware_i2c) 
 
 # create map/bin/hex/uf2 file etc.
 pico_add_extra_outputs(delay-control)

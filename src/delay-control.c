@@ -4,14 +4,21 @@
 #include "hardware/pwm.h"
 #include "hardware/i2c.h"
 
+#include "../libs/ads1115.h"
+
 /* 
    PIN 15: PWM for controlling the time
    PIN XX: Modulation-Enable Switch
-   PIN 21: I2C SDA for the ADC with the Delay-Time, Mod-Freq and Mod-Amp pot
-   PIN 22: I2C SCL
+   PIN 20: I2C SDA for the ADC with the Delay-Time, Mod-Freq and Mod-Amp pot
+   PIN 21: I2C SCL
 */
+#define I2C_FREQ 40e3
+#define I2C_PORT i2c1
+static const uint8_t ADR_ADC = 0x48; 
+static const uint8_t SDA_PIN = 14;
+static const uint8_t SCL_PIN = 15;
 
-static const uint8_t ADR_ADC 0x48; 
+struct ads1115_adc adc;
 
 void PWMstuff() {
   // // Tell GPIO 0 and 1 they are allocated to the PWM
@@ -40,11 +47,49 @@ void PWMstuff() {
 int main() {
   stdio_init_all();
 
-  while (true)
-  {
-    printf("Hello\n");
-    sleep_ms(1e3);
-  }
-  
+
+    // Initialise I2C
+    i2c_init(I2C_PORT, I2C_FREQ);
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+
+    // Initialise ADC
+    ads1115_init(I2C_PORT, ADR_ADC, &adc);
+    
+    // and the full-scale voltage range is set to +/- 4.096 V.
+    ads1115_set_input_mux(ADS1115_MUX_SINGLE_1, &adc);
+    ads1115_set_pga(ADS1115_PGA_4_096, &adc);
+    ads1115_set_data_rate(ADS1115_RATE_475_SPS, &adc);
+
+    // Write the configuration for this to have an effect.
+    ads1115_write_config(&adc);
+
+    // Data containers
+    float volts;
+    uint16_t adc_value;
+
+    while (true) {
+        ads1115_set_input_mux(ADS1115_MUX_SINGLE_0, &adc);
+        // Read a value, convert to volts, and print.
+        ads1115_read_adc(&adc_value, &adc);
+        volts = ads1115_raw_to_volts(adc_value, &adc);
+        printf("ADC Ch-0: %u  Voltage: %f\n", adc_value, volts);
+
+        ads1115_set_input_mux(ADS1115_MUX_SINGLE_1, &adc);
+        // Read a value, convert to volts, and print.
+        ads1115_read_adc(&adc_value, &adc);
+        volts = ads1115_raw_to_volts(adc_value, &adc);
+        printf("ADC Ch-1: %u  Voltage: %f\n", adc_value, volts);
+
+        ads1115_set_input_mux(ADS1115_MUX_SINGLE_2, &adc);
+        // Read a value, convert to volts, and print.
+        ads1115_read_adc(&adc_value, &adc);
+        volts = ads1115_raw_to_volts(adc_value, &adc);
+        printf("ADC Ch-2: %u  Voltage: %f\n", adc_value, volts);
+
+        sleep_ms(10);
+    }
 
 }

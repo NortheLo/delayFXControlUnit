@@ -1,0 +1,3 @@
+[submodule "libs/--force"]
+	path = libs/--force
+	url = https://github.com/NortheLo/pico-ads1115
