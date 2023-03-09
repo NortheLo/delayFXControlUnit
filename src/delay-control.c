@@ -13,8 +13,8 @@
    PIN 28: Mod-Amp potentiometer
 */
 
-#define PWM_PIN   15
 #define MOD_SWT   13
+#define PWM_PIN   15
 #define DTIM_PIN  26
 #define MFRQ_PIN  27
 #define MAMP_PIN  28
