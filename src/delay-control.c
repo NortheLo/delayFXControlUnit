@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/pwm.h"
@@ -7,31 +6,45 @@
 #include "hardware/gpio.h"
 
 /* 
-   PIN 16: PWM for controlling the time
-   PIN XX: Modulation-Enable Switch
+   PIN 13: Modulation-Enable Switch
+   PIN 15: PWM for controlling the time
    PIN 26: Delay-Time potentiometer 
    PIN 27: Mod-Freq potentiometer 
    PIN 28: Mod-Amp potentiometer
 */
 
-#define PWM_PIN   16
+#define PWM_PIN   15
+#define MOD_SWT   13
 #define DTIM_PIN  26
 #define MFRQ_PIN  27
 #define MAMP_PIN  28
 
-void PWMstuff() {
+static const uint maxCounter = 10e3;
+static const uint adc_res = 4096;
+
+void setupPWM(uint slice_num) {
   gpio_set_function(PWM_PIN, GPIO_FUNC_PWM);
 
-  uint slice_num = pwm_gpio_to_slice_num(PWM_PIN);
+  slice_num = pwm_gpio_to_slice_num(PWM_PIN);
 
   pwm_set_clkdiv(slice_num, 125); //PWM clock should now be running at (PICO_CLOCK=125MHz/125) = 1MHz
 
   // Set the PWM running
   pwm_set_enabled(slice_num, true);
 
-  pwm_set_wrap(slice_num, 1e3);
+  pwm_set_wrap(slice_num, maxCounter);
   // Set channel A output high for one cycle before dropping
-  pwm_set_chan_level(slice_num, PWM_CHAN_A, 500);
+  pwm_set_chan_level(slice_num, PWM_CHAN_A, 5e3);
+
+  sleep_ms(1e3); 
+}
+
+void setPWMnoMod(uint16_t* adcData, uint slice_num) {
+  float t = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
+  pwm_set_chan_level(slice_num, PWM_CHAN_A, (uint)t);
+}
+
+void setPWMMod() {
 }
 
 void setupADC() {
@@ -41,7 +54,7 @@ void setupADC() {
   adc_gpio_init(MAMP_PIN);
 }
 
-void adcLoop(uint16_t* adcData) {
+void loopADC(uint16_t* adcData, uint slice) {
   int cnt = 0;
   adc_select_input(cnt);
 
@@ -53,6 +66,18 @@ void adcLoop(uint16_t* adcData) {
     cnt++;
     if (cnt > 2) {
       cnt = 0;
+
+      bool mod = gpio_get(MOD_SWT);
+      if (mod == true) {
+        gpio_put(PICO_DEFAULT_LED_PIN, 1);
+        setPWMMod();
+      }
+
+      else {
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+        setPWMnoMod(adcData, slice);
+      }
+      
     }
     adc_select_input(cnt);
     
@@ -60,15 +85,25 @@ void adcLoop(uint16_t* adcData) {
   }
 }
 
-int main() {
-  uint16_t dat[2] = {0};
-  stdio_init_all();
-  setupADC();
+void setupGPIO() {
+  gpio_init(MOD_SWT);
+  gpio_set_dir(MOD_SWT, GPIO_IN);
 
   gpio_init(PICO_DEFAULT_LED_PIN);
   gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-  gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
-  adcLoop(dat);
+  gpio_put(PICO_DEFAULT_LED_PIN, 1);
+  sleep_ms(1e3);
   gpio_put(PICO_DEFAULT_LED_PIN, 0);
+}
+
+int main() {
+  uint16_t dat[2] = {0};
+  uint slicePWM;
+
+  stdio_init_all();
+  setupPWM(slicePWM);
+  setupGPIO();
+  setupADC();
+  loopADC(dat, slicePWM);
 }
