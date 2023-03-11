@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "hardware/pwm.h"
 
@@ -44,7 +45,14 @@ void setPWMnoMod(uint16_t* adcData, uint slice_num) {
   pwm_set_chan_level(slice_num, PWM_CHAN_A, (uint)t);
 }
 
-void setPWMMod() {
+void setPWMMod(uint16_t* adcData, uint slice_num) {
+  float x = 0.5 * M_PI;
+  float t = *(adcData + 3) sin( *(adcData + 2) * x);
+  printf("Sin: %f\n", t);
+
+  float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
+
+  //   pwm_set_chan_level(slice_num, PWM_CHAN_A, (uint) (t + d));
 }
 
 void setupADC() {
@@ -70,7 +78,7 @@ void loopADC(uint16_t* adcData, uint slice) {
       bool mod = gpio_get(MOD_SWT);
       if (mod == true) {
         gpio_put(PICO_DEFAULT_LED_PIN, 1);
-        setPWMMod();
+        setPWMMod(adcData, slice);
       }
 
       else {
