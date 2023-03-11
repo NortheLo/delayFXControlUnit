@@ -22,37 +22,46 @@
 
 static const uint maxCounter = 10e3;
 static const uint adc_res = 4096;
+static uint slice;
 
-void setupPWM(uint slice_num) {
+void setupPWM() {
   gpio_set_function(PWM_PIN, GPIO_FUNC_PWM);
 
-  slice_num = pwm_gpio_to_slice_num(PWM_PIN);
+  slice = pwm_gpio_to_slice_num(PWM_PIN);
 
-  pwm_set_clkdiv(slice_num, 125); //PWM clock should now be running at (PICO_CLOCK=125MHz/125) = 1MHz
+  pwm_set_clkdiv(slice, 125); //PWM clock should now be running at (PICO_CLOCK=125MHz/125) = 1MHz
 
   // Set the PWM running
-  pwm_set_enabled(slice_num, true);
+  pwm_set_enabled(slice, true);
 
-  pwm_set_wrap(slice_num, maxCounter);
+  pwm_set_wrap(slice, maxCounter);
   // Set channel A output high for one cycle before dropping
-  pwm_set_chan_level(slice_num, PWM_CHAN_A, 5e3);
+  pwm_set_chan_level(slice, PWM_CHAN_A, 5e3);
 
   sleep_ms(1e3); 
 }
 
-void setPWMnoMod(uint16_t* adcData, uint slice_num) {
+void setPWMnoMod(uint16_t* adcData) {
   float t = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
-  pwm_set_chan_level(slice_num, PWM_CHAN_A, (uint)t);
+  pwm_set_chan_level(slice, PWM_CHAN_A, (uint)t);
 }
 
-void setPWMMod(uint16_t* adcData, uint slice_num) {
-  float x = 0.5 * M_PI;
-  float t = *(adcData + 3) sin( *(adcData + 2) * x);
-  printf("Sin: %f\n", t);
+void setPWMMod(uint16_t* adcData, int cnt) {
+  float x = cnt * (M_PI/50);
+  //float sinMod = *(adcData + 1) * sin( *(adcData + 1) * x);
+  float sinMod = sin(*(adcData + 1) * x);
+
+  printf("Sin: %f @pot val %d\n", sinMod, *(adcData + 1));
 
   float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
 
-  //   pwm_set_chan_level(slice_num, PWM_CHAN_A, (uint) (t + d));
+  uint outputVal = sinMod + d;
+  if (outputVal > maxCounter)
+  {
+    outputVal = maxCounter
+  }
+  
+  //   pwm_set_chan_level(slice, PWM_CHAN_A, outputVal);
 }
 
 void setupADC() {
@@ -62,8 +71,9 @@ void setupADC() {
   adc_gpio_init(MAMP_PIN);
 }
 
-void loopADC(uint16_t* adcData, uint slice) {
+void loopADC(uint16_t* adcData) {
   int cnt = 0;
+  int bigCnt = 0;
   adc_select_input(cnt);
 
   while (true)
@@ -77,13 +87,20 @@ void loopADC(uint16_t* adcData, uint slice) {
 
       bool mod = gpio_get(MOD_SWT);
       if (mod == true) {
+        bigCnt++;
+        if (bigCnt > 1e2)
+        {
+          bigCnt = 0;
+        }
+        
         gpio_put(PICO_DEFAULT_LED_PIN, 1);
-        setPWMMod(adcData, slice);
+
+        setPWMMod(adcData, bigCnt);
       }
 
       else {
         gpio_put(PICO_DEFAULT_LED_PIN, 0);
-        setPWMnoMod(adcData, slice);
+        setPWMnoMod(adcData);
       }
       
     }
@@ -107,11 +124,10 @@ void setupGPIO() {
 
 int main() {
   uint16_t dat[2] = {0};
-  uint slicePWM;
 
   stdio_init_all();
-  setupPWM(slicePWM);
+  setupPWM();
   setupGPIO();
   setupADC();
-  loopADC(dat, slicePWM);
+  loopADC(dat);
 }
