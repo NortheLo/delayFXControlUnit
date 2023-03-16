@@ -48,20 +48,20 @@ void setPWMnoMod(uint16_t* adcData) {
 
 void setPWMMod(uint16_t* adcData, int cnt) {
   float x = cnt * (M_PI/50);
-  //float sinMod = *(adcData + 1) * sin( *(adcData + 1) * x);
-  float sinMod = sin(*(adcData + 1) * x);
-
-  printf("Sin: %f @pot val %d\n", sinMod, *(adcData + 1));
-
+  float sinMod = *(adcData + 1) * sin( *(adcData + 1) * x);
   float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
 
-  uint outputVal = sinMod + d;
-  if (outputVal > maxCounter)
-  {
-    outputVal = maxCounter
+  uint outputVal = (uint) sinMod + d;
+  printf("Sin: %u @pot val %d\n", outputVal, *(adcData + 1));
+
+  if (outputVal > (float)maxCounter) {
+    outputVal = maxCounter;
   }
-  
-  //   pwm_set_chan_level(slice, PWM_CHAN_A, outputVal);
+  else if (outputVal < 0.0f) {
+    outputVal = 0;
+  }
+
+  //pwm_set_chan_level(slice, PWM_CHAN_A, outputVal);
 }
 
 void setupADC() {
