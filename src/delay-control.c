@@ -1,8 +1,9 @@
 #include <stdio.h>
+#include <time.h>
 #include <math.h>
 #include "pico/stdlib.h"
 #include "hardware/pwm.h"
-
+#include "hardware/irq.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
 
@@ -14,54 +15,82 @@
    PIN 28: Mod-Amp potentiometer
 */
 
-#define MOD_SWT   13
-#define PWM_PIN   15
-#define DTIM_PIN  26
-#define MFRQ_PIN  27
-#define MAMP_PIN  28
+#define MOD_SWT   13    // Swtch for toggling modulation
+#define PWM_PIN   0
+#define DTIM_PIN  26    // Mod OFF: Delay Time; MOD ON: Timeoffset in modulation
+#define MFRQ_PIN  27    // MOD ON: Frequency of modulation
+#define MAMP_PIN  28    // MOD ON: Amplitude of modulation
 
-static const uint maxCounter = 10e3;
 static const uint adc_res = 4096;
-static uint slice;
+static const uint maxCounter = 0xffff;
+
+typedef struct {
+  uint slice;
+  bool enabled;
+  uint val;
+} pwmdata;
+
+static pwmdata modPWM;
+
+clock_t getClock() {
+  return (clock_t) time_us_64() / 1e4;
+}
+
+void pwm_out() {
+  pwm_clear_irq(pwm_gpio_to_slice_num(PWM_PIN));
+
+  if (modPWM.enabled) {
+      pwm_set_gpio_level(PWM_PIN, modPWM.val);
+  }
+  
+  else if (!modPWM.enabled) {
+      pwm_set_gpio_level(PWM_PIN, modPWM.val);
+  }
+}
 
 void setupPWM() {
   gpio_set_function(PWM_PIN, GPIO_FUNC_PWM);
 
-  slice = pwm_gpio_to_slice_num(PWM_PIN);
+  modPWM.slice = pwm_gpio_to_slice_num(PWM_PIN);
 
-  pwm_set_clkdiv(slice, 125); //PWM clock should now be running at (PICO_CLOCK=125MHz/125) = 1MHz
+  pwm_clear_irq(modPWM.slice);
+  pwm_set_irq_enabled(modPWM.slice, true);
+  irq_set_exclusive_handler(PWM_IRQ_WRAP, pwm_out);
+  irq_set_enabled(PWM_IRQ_WRAP, true);
 
-  // Set the PWM running
-  pwm_set_enabled(slice, true);
+  pwm_config config = pwm_get_default_config();
 
-  pwm_set_wrap(slice, maxCounter);
-  // Set channel A output high for one cycle before dropping
-  pwm_set_chan_level(slice, PWM_CHAN_A, 5e3);
+  pwm_config_set_clkdiv(&config, 4.f);
+  // Load the configuration into our PWM slice, and set it running.
+  pwm_init(modPWM.slice, &config, true);
 
-  sleep_ms(1e3); 
+  modPWM.enabled = false;
+  modPWM.val = 60e3;
 }
 
 void setPWMnoMod(uint16_t* adcData) {
-  float t = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
-  pwm_set_chan_level(slice, PWM_CHAN_A, (uint)t);
+  float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter; // For using the whole value range of the PWM counter
+  modPWM.val = (uint) d;
 }
 
-void setPWMMod(uint16_t* adcData, int cnt) {
-  float x = cnt * (M_PI/50);
-  float sinMod = *(adcData + 1) * sin( *(adcData + 1) * x);
-  float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter;
+void setPWMMod(uint16_t* adcData) {
+  float a = (float) *(adcData + 2);
+  float b = (float) *(adcData + 1);
+  float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter; // For using the whole value range of the PWM counter
+  clock_t t1 = getClock();
 
-  uint outputVal = (uint) sinMod + d;
-  printf("Sin: %u @pot val %d\n", outputVal, *(adcData + 1));
-
-  if (outputVal > (float)maxCounter) {
-    outputVal = maxCounter;
+  float modulation = 5 *  a * sin(10 * b * t1) + d; // Range the period should be between ~0.05Hz and 50Hz; b therefore must be in the range of 7.2 to 7.2e3 (2*adcRes)
+  //printf("Mod Value: %f = %f * sin(2 * %f * t) + %f\n", modulation, a, b, d);
+  //printf("Mod Val %d\n", (uint) modulation);
+  // Catch over or underflows 
+  if (modulation > (float)maxCounter) {
+    modulation = maxCounter;
   }
-  else if (outputVal < 0.0f) {
-    outputVal = 0;
+  else if (modulation < 0.0f) {
+    modulation = 0;
   }
 
-  //pwm_set_chan_level(slice, PWM_CHAN_A, outputVal);
+  modPWM.val = (uint) modulation;
 }
 
 void setupADC() {
@@ -73,40 +102,28 @@ void setupADC() {
 
 void loopADC(uint16_t* adcData) {
   int cnt = 0;
-  int bigCnt = 0;
   adc_select_input(cnt);
 
-  while (true)
-  {
+  while (true) {
     *(adcData+cnt) = adc_read();
+    modPWM.enabled = gpio_get(MOD_SWT);
+    
+    if (modPWM.enabled) {
+      gpio_put(PICO_DEFAULT_LED_PIN, 1);
+      setPWMMod(adcData);
+    }
 
-    //printf("Ch %d: %u\n", cnt, *(adcData + cnt));
+    else {
+      gpio_put(PICO_DEFAULT_LED_PIN, 0);
+      setPWMnoMod(adcData);
+    }
+
     cnt++;
     if (cnt > 2) {
       cnt = 0;
-
-      bool mod = gpio_get(MOD_SWT);
-      if (mod == true) {
-        bigCnt++;
-        if (bigCnt > 1e2)
-        {
-          bigCnt = 0;
-        }
-        
-        gpio_put(PICO_DEFAULT_LED_PIN, 1);
-
-        setPWMMod(adcData, bigCnt);
-      }
-
-      else {
-        gpio_put(PICO_DEFAULT_LED_PIN, 0);
-        setPWMnoMod(adcData);
-      }
-      
     }
     adc_select_input(cnt);
-    
-    sleep_ms(100);
+    //sleep_ms(100);
   }
 }
 
