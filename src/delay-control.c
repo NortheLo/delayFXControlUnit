@@ -6,6 +6,7 @@
 #include "hardware/irq.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
+#include "hardware_adc/multicore.h"
 
 /* 
    PIN 13: Modulation-Enable Switch
@@ -79,9 +80,9 @@ void setPWMMod(uint16_t* adcData) {
   float d = ((float)(*adcData)/(float)adc_res) * (float)maxCounter; // For using the whole value range of the PWM counter
   clock_t t1 = getClock();
 
-  float modulation = 5 *  a * sin(10 * b * t1) + d; // Range the period should be between ~0.05Hz and 50Hz; b therefore must be in the range of 7.2 to 7.2e3 (2*adcRes)
+  float modulation = 4 *  a * sin(b/2 * t1) + d; // Range the period should be between ~0.05Hz and 50Hz; b therefore must be in the range of 7.2 to 7.2e3 (2*adcRes)
   //printf("Mod Value: %f = %f * sin(2 * %f * t) + %f\n", modulation, a, b, d);
-  //printf("Mod Val %d\n", (uint) modulation);
+  
   // Catch over or underflows 
   if (modulation > (float)maxCounter) {
     modulation = maxCounter;
@@ -89,7 +90,7 @@ void setPWMMod(uint16_t* adcData) {
   else if (modulation < 0.0f) {
     modulation = 0;
   }
-
+  printf("%d\n", (uint) modulation);
   modPWM.val = (uint) modulation;
 }
 
@@ -123,7 +124,6 @@ void loopADC(uint16_t* adcData) {
       cnt = 0;
     }
     adc_select_input(cnt);
-    //sleep_ms(100);
   }
 }
 
