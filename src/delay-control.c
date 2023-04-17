@@ -6,7 +6,7 @@
 #include "hardware/irq.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
-#include "hardware_adc/multicore.h"
+
 
 /* 
    PIN 13: Modulation-Enable Switch
