@@ -2,6 +2,8 @@
 
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
+
+#include "../include/pin_info.h"
 #include "../include/adc.h"
 
-void setupGPIO(adcinfo* pot);
+void setupGPIO(pinInfo* pinout);

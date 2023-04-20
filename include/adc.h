@@ -2,16 +2,10 @@
 
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
+
+#include "../include/pin_info.h"
 #include "../include/pwm.h"
 
-typedef struct adc
-{
-    uint tim_pot;
-    uint frq_pot;
-    uint amp_pot;
-    uint swt;
-} adcinfo;
+void setupADC(pinInfo* pot);
 
-void setupADC(adcinfo* pot);
-
-void loopADC(uint16_t* adcData, adcinfo* pot, pwmdata* infoPWM);
+void loopADC(uint16_t* adcData, pinInfo* pinout);

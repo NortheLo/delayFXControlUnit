@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "stdint.h": "c",
+        "time.h": "c",
+        "limits": "c",
+        "pwm.h": "c"
+    }
+}
