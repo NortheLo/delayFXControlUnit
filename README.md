@@ -6,5 +6,5 @@ The purpose of this code is to read the pot and switch values and produce the de
 ## Build
 1. Clone this repo with ``git clone``
 2. Create your build directory and run Cmake to check, if you have correctly installed the pico SDK with ``mkdir build && cd build`` and ``cmake ..``
-3. Build the projekt with ``make -j $(nproc --all)
+3. Build the projekt with ``make -j $(nproc --all)``
 4. Copy the binary into the Flash of the Raspberry Pico
